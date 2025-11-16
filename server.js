@@ -12,6 +12,7 @@ const userRoutes = require('./routes/users');
 const budgetRoutes = require('./routes/budgets');
 const goalRoutes = require('./routes/goals');
 const invitationRoutes = require('./routes/invitations');
+const currencyRoutes = require('./routes/currency');
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/budgets', budgetRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/invitations', invitationRoutes);
+app.use('/api/currency', currencyRoutes);
 
 // Health check
 app.get('/', (req, res) => {

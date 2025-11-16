@@ -15,10 +15,15 @@ const SharedBudgetSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  totalBudgetPHP: {
+    type: Number,
+    required: true,
+    min: 0
+  },
   currency: {
     type: String,
     default: 'PHP',
-    enum: ['PHP', 'USD', 'EUR', 'GBP', 'JPY', 'AUD', 'CAD']
+    uppercase: true
   },
   creator: {
     type: mongoose.Schema.Types.ObjectId,
@@ -42,6 +47,19 @@ const SharedBudgetSchema = new mongoose.Schema({
       ref: 'User'
     },
     amount: {
+      type: Number,
+      required: true
+    },
+    amountPHP: {
+      type: Number,
+      required: true
+    },
+    currency: {
+      type: String,
+      required: true,
+      uppercase: true
+    },
+    exchangeRate: {
       type: Number,
       required: true
     },

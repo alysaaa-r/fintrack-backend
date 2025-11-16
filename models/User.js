@@ -30,6 +30,11 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  preferredCurrency: {
+    type: String,
+    default: 'PHP',
+    uppercase: true
+  },
   createdAt: {
     type: Date,
     default: Date.now

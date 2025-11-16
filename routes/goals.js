@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const SharedGoal = require('../models/SharedGoal');
+const currencyService = require('../services/currencyService');
 
 // @route   POST /api/goals
 // @desc    Create a new shared goal
@@ -10,13 +11,19 @@ router.post('/', protect, async (req, res) => {
   try {
     const { name, category, targetAmount, currency } = req.body;
 
+    const goalCurrency = currency || 'PHP';
+    
+    // Convert target amount to PHP for database storage
+    const targetAmountPHP = await currencyService.convertToBase(targetAmount, goalCurrency);
+
     const memberColors = ['#3B82F6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
     
     const goal = await SharedGoal.create({
       name,
       category,
       targetAmount,
-      currency: currency || 'PHP',
+      targetAmountPHP,
+      currency: goalCurrency,
       creator: req.user._id,
       members: [{
         user: req.user._id,
@@ -98,12 +105,19 @@ router.get('/:id', protect, async (req, res) => {
 });
 
 // @route   POST /api/goals/:id/contributions
-// @desc    Add contribution to goal
+// @desc    Add contribution to goal (with real-time currency conversion)
 // @access  Private
 router.post('/:id/contributions', protect, async (req, res) => {
   try {
-    const { amount, type, description } = req.body;
+    const { amount, type, description, currency } = req.body;
     
+    if (!amount || !currency) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount and currency are required'
+      });
+    }
+
     const goal = await SharedGoal.findById(req.params.id);
 
     if (!goal) {
@@ -122,9 +136,16 @@ router.post('/:id/contributions', protect, async (req, res) => {
       });
     }
 
+    // Convert contribution amount to PHP for storage
+    const amountPHP = await currencyService.convertToBase(amount, currency);
+    const exchangeRate = await currencyService.getRate(currency, 'PHP');
+
     goal.contributions.push({
       user: req.user._id,
       amount,
+      amountPHP,
+      currency,
+      exchangeRate,
       type: type || 'add',
       description,
       date: new Date()
@@ -135,9 +156,17 @@ router.post('/:id/contributions', protect, async (req, res) => {
 
     res.json({
       success: true,
-      goal
+      goal,
+      conversionInfo: {
+        originalAmount: amount,
+        originalCurrency: currency,
+        convertedAmount: amountPHP,
+        baseCurrency: 'PHP',
+        exchangeRate
+      }
     });
   } catch (error) {
+    console.error('Add contribution error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error adding contribution'
