@@ -13,28 +13,26 @@ const connectFirebase = () => {
     if (process.env.FIREBASE_KEY_BASE64) {
       console.log('🔑 Detected Base64 Configuration...');
       // Decode the string back into a JSON object
-      const decodedBuffer = Buffer.from(process.env.FIREBASE_KEY_BASE64, 'base64');
-      const decodedString = decodedBuffer.toString('utf-8');
-      serviceAccount = JSON.parse(decodedString);
+      const decodedKey = Buffer.from(process.env.FIREBASE_KEY_BASE64, 'base64').toString('utf-8');
+      serviceAccount = JSON.parse(decodedKey);
     } 
     
     // 2. DEVELOPMENT: Use Local File (Laptop)
     else {
+      console.log('⚠️ No Base64 variable found. Looking for local file...');
       const localPath = path.join(__dirname, '..', 'serviceAccountKey.json');
       if (fs.existsSync(localPath)) {
-        console.log('📂 Detected Local Service Account File...');
         serviceAccount = require(localPath);
       } else {
         throw new Error('CRITICAL: No credentials found. Set FIREBASE_KEY_BASE64 on Render.');
       }
     }
 
-    // Initialize App
     initializeApp({
       credential: cert(serviceAccount)
     });
     
-    console.log('✅ Firebase Initialized Successfully!');
+    console.log('✅ Firebase Initialization Successful!');
     return getFirestore();
 
   } catch (error) {
