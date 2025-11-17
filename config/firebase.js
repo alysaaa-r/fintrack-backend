@@ -20,7 +20,10 @@ const connectFirebase = () => {
           "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40fintrack-d6f85.iam.gserviceaccount.com",
           "universe_domain": "googleapis.com"
     };
-
+    // Validate required environment variables
+    if (!serviceAccount.project_id || !serviceAccount.private_key || !serviceAccount.client_email) {
+      throw new Error('Missing required Firebase environment variables');
+    }
     initializeApp({
       credential: cert(serviceAccount)
     });

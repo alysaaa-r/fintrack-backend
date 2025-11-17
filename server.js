@@ -63,15 +63,12 @@ app.use('/api/goals', goalRoutes);
 app.use('/api/invitations', invitationRoutes);
 app.use('/api/currency', currencyRoutes);
 
-
-// Add this AFTER your existing routes (around line 50-60):
-
-// Health check endpoint for app connectivity (Firestore)
+// Health check endpoint - SINGLE VERSION ONLY
 app.get('/api/health', async (req, res) => {
   try {
     const db = getFirestore();
     // Try a simple Firestore operation
-    await db.collection('healthcheck').get();
+    await db.collection('healthcheck').limit(1).get();
     res.json({
       status: 'OK',
       timestamp: new Date().toISOString(),
@@ -81,22 +78,14 @@ app.get('/api/health', async (req, res) => {
       port: process.env.PORT || 5000
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      status: 'ERROR',
+      error: error.message 
+    });
   }
 });
 
-// Error handling middleware (keep this at the end)
-app.use((err, req, res, next) => {
-  // ... existing error handling
-});
-
-
-// Health check
-app.get('/api/health/', (req, res) => {
-  res.json({ message: 'FinTrack API Server Running',status: 'healthy' });
-});
-
-// Error handling middleware
+// Error handling middleware (must be last)
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(err.status || 500).json({
