@@ -1,39 +1,31 @@
-// backend/config/firebase.js - Firebase initialization
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
-const fs = require('fs');
-const path = require('path');
 
 const connectFirebase = () => {
   try {
-    console.log('🔄 Initializing Firebase...');
-    let serviceAccount;
-
-    // PRIORITY 1: Check for Base64 Variable (Render Production)
-    if (process.env.FIREBASE_KEY_BASE64) {
-      console.log('🔑 Detected Base64 Service Account...');
-      // Decode the long string back into JSON
-      const decodedConfig = Buffer.from(process.env.FIREBASE_KEY_BASE64, 'base64').toString('utf-8');
-      serviceAccount = JSON.parse(decodedConfig);
-    } 
+    console.log('🔄 Initializing Firebase (Hardcoded Check)...');
     
-    // PRIORITY 2: Check for Local File (Development)
-    else {
-      const localPath = path.join(__dirname, '..', 'serviceAccountKey.json');
-      if (fs.existsSync(localPath)) {
-        console.log('📂 Detected Local Service Account File...');
-        serviceAccount = require(localPath);
-      } else {
-        throw new Error('No service account found! Set FIREBASE_KEY_BASE64 or add serviceAccountKey.json');
-      }
-    }
+    // 🔴 PASTE YOUR JSON CONTENT INSIDE THESE QUOTES 🔴
+    // It should look like: const serviceAccount = { "type": "service_account", ... };
+    const serviceAccount = {
+         "type": "service_account",
+         "project_id": "fintrack-d6f85",
+         "private_key_id": "7c5efc47c4802a2fe56dba93e10a463d1ef0af73",
+          "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCy/zdPK7oZge8w\nFxZBU3FgVaTXlXfpnTM6nafBNDEfBru7y4aJbuZ3n4lmW1txiLF5s5cV5bIlJTqv\n5mgV8B3bjHzLf5uNj+MzkTwikyJXnGol+h89+G/iQvzoioytJQY+qXLp2uIPeaat\n6CZTCmn/jn8t0ijpPDXXBOXbTKa6BaRWccGOeSsMjpHX/8j4D7xBZ/a6xiYzhr1C\nXXnO4nb5WWbFhqqYgGJuBSILgxXYE2n4fxaVcQcSG2x5P0NPopI1GASMZwnD5gEK\n6gUtva0z0xFNQ3ZH8VV7MpUE2zdexmIMlnCk8OSGpcihOwxgzSTRXvb3efNLK7CW\nkV/4u10PAgMBAAECggEACOtrTUTl4vFKLZJquX2+/CUPhWByt33t5rT4DGbdaDdI\nWPUe9kTus5H92l2vhGjURIxFlcjeNfD8GefYfU2YEtp5yDFZBiTgFmjddH8rJu7w\n4kx509ryxpHaqHvbbdqzWkwFk0GzPpW6M0IY7epqfcxMBpAQqA62Q60qzjZXLepB\nKSfGaqRs9nc5Co377yTu6B/6KdrJmOikoc7d35siQS6JQWCuVN2dFX+p5PafBUVw\nh26J5nD+yqwGx9aRDoe7GuQxMdJRa6SFbHnABjBa2y5KTgyj258Yji81+ZYzvgSK\nGp2nhMu1HgF/7axqT46qpaXl+s9dmGg0OC0dJ5gVgQKBgQDcGHt/FKAnSsqbQi5/\nO1NNNm1a289VBL5RPu7EpeOnKGtcIsb45DPkuX4RYwbl7+tAhiYKoWzlQd4TojD6\njVXAHhfsVZEMiibXRV8gmm8XcxKrMp5Ax7XFgyZipc62Jc0w/tTan5aIopvigqM/\n51k64b98J4xmSHJfsIOYgKl7jQKBgQDQMmQ/FMy2ZVJs5l97S4J5clSYCM0oRS7n\nOPNDAa/tycK4JIxLQnuUmDbXt1sgM+WDKNcPmquCK6V5Aeg9NfmQzeSHpaDrISwO\nqHtHzYdcaKhHLMZdr2H59F98PO1b0pfXO/jiDrc68A/p8myrNHa8uYJrAl/cq94X\nl8UI4HTGCwKBgQCW8M9ZArsm1zsFqSicJwJk9IuggRi6dKtUqrUy9ZWfoK+oG02b\niV0xYijcIa6saJJMyPMz3SsCOt7jVhsC6YTCYaEEelYkZGZowfGQOXkwesF12RwA\nzzWQw/XCN3YBIwGKtWkimcmx4NrJR9BPVgiywfkBW1oFF3AgwbwuDSauTQKBgDnu\ni65x3zSxpOnggJkSPdAFXDyh1lRqS87TLf1rLsT/60rKAK/AZBrI8Bm+T4D6b9a7\nOnyBEVA7TOQK/9BogHUmlXyZPdmvdU7u2r70FcJE7O5BK0FOV/jxYtBzM6jlRJMD\ngRGF/r5LpmH2rv5ErvV8uSmFk58Xw8jU1mLN8jBZAoGASb8lvLRiih2SDDJo9PhR\nWfQP336jCRVcSC5SIK965h4Ufn38EBwUNr7yCwWjUpvFAVWCC68ETovB6IyR7bpL\nFKKZb1PBkGod8VEK2kkGiwCrtQbl6QgdbzUVRRLVhtughnPYgrrJwGZp+FhDqqCw\n+bH9+e+vjUtPZzGi7FxQ/gY=\n-----END PRIVATE KEY-----\n",
+          "client_email": "firebase-adminsdk-fbsvc@fintrack-d6f85.iam.gserviceaccount.com",
+          "client_id": "104868237949223389470",
+          "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+          "token_uri": "https://oauth2.googleapis.com/token",
+          "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+          "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40fintrack-d6f85.iam.gserviceaccount.com",
+          "universe_domain": "googleapis.com"
+    };
 
-    // Initialize the App
     initializeApp({
       credential: cert(serviceAccount)
     });
-
-    console.log('✅ Firebase Initialized Successfully!');
+    
+    console.log('✅ Firebase Initialized with HARDCODED credentials');
     return getFirestore();
 
   } catch (error) {
