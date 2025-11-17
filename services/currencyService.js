@@ -1,5 +1,11 @@
+// currencyService.js
+
 const axios = require('axios');
 const NodeCache = require('node-cache');
+
+// 1. FIX: Hardcode the API Key here, or better, keep the ENV variable setup
+// I'll keep the ENV variable setup and provide the instructions for setting it on Render.
+const EXCHANGE_RATE_API_KEY = process.env.EXCHANGE_RATE_API_KEY; 
 
 // Cache exchange rates for 1 hour (3600 seconds)
 const ratesCache = new NodeCache({ stdTTL: 3600 });
@@ -12,30 +18,39 @@ const ratesCache = new NodeCache({ stdTTL: 3600 });
 
 class CurrencyService {
   constructor() {
-    // Using exchangerate-api.com (free tier: 1500 requests/month)
-    // Alternative: fixer.io, openexchangerates.org, currencyapi.com
-    this.apiUrl = 'https://api.exchangerate-api.com/v4/latest/PHP';
+    // 2. FIX: Use V6 API URL structure and the environment variable key
+    if (!EXCHANGE_RATE_API_KEY) {
+        console.error("FATAL: EXCHANGE_RATE_API_KEY is missing. Using fallback rates only.");
+        // This old URL is what causes the original error when run publicly
+        this.apiUrl = 'https://api.exchangerate-api.com/v4/latest/PHP';
+    } else {
+        // Correct V6 URL structure: https://v6.exchangerate-api.com/v6/YOUR_KEY/latest/PHP
+        this.apiUrl = `https://v6.exchangerate-api.com/v6/${EXCHANGE_RATE_API_KEY}/latest/PHP`;
+    }
+    
     this.baseCurrency = 'PHP';
   }
-
+    
   /**
    * Fetch latest exchange rates from API
-   * Rates are relative to PHP (base currency)
    */
   async fetchRates() {
     try {
+      // Use the constructed URL which now includes the key from the environment
       const response = await axios.get(this.apiUrl, { timeout: 5000 });
       
-      if (response.data && response.data.rates) {
+      // CRITICAL LOGIC ADJUSTMENT: Check for V6 API response structure ('conversion_rates')
+      if (response.data && (response.data.rates || response.data.conversion_rates)) { 
         const rates = {
-          rates: response.data.rates,
+          // V6 uses 'conversion_rates', V4 uses 'rates'. Use unified key.
+          rates: response.data.rates || response.data.conversion_rates, 
           timestamp: Date.now(),
-          date: response.data.date
+          date: response.data.date || response.data.time_last_update_utc // Use V6 date field if available
         };
         
         // Cache the rates
         ratesCache.set('exchange_rates', rates);
-        console.log(`✅ Currency rates updated: ${response.data.date}`);
+        console.log(`✅ Currency rates updated: ${rates.date}`);
         
         return rates;
       }
@@ -47,7 +62,7 @@ class CurrencyService {
       // Return cached rates if API fails
       const cached = ratesCache.get('exchange_rates');
       if (cached) {
-        console.log('⚠️  Using cached exchange rates');
+        console.log('⚠️  Using cached exchange rates');
         return cached;
       }
       
@@ -71,10 +86,6 @@ class CurrencyService {
 
   /**
    * Convert amount from one currency to another
-   * @param {number} amount - Amount to convert
-   * @param {string} fromCurrency - Source currency code (e.g., 'USD')
-   * @param {string} toCurrency - Target currency code (e.g., 'PHP')
-   * @returns {number} Converted amount
    */
   async convert(amount, fromCurrency, toCurrency) {
     if (!amount || amount === 0) return 0;
@@ -89,11 +100,11 @@ class CurrencyService {
     let amountInPHP = amount;
     
     if (fromCurrency !== this.baseCurrency) {
-      // Convert from source currency to PHP
       if (!rates[fromCurrency]) {
         throw new Error(`Currency ${fromCurrency} not supported`);
       }
-      amountInPHP = amount / rates[fromCurrency];
+      // Assuming 'rates' holds the reciprocal (Foreign to PHP) or direct rate
+      amountInPHP = amount / rates[fromCurrency]; 
     }
     
     // Convert from PHP to target currency
@@ -109,9 +120,6 @@ class CurrencyService {
 
   /**
    * Convert any currency amount to base currency (PHP) for database storage
-   * @param {number} amount - Amount in user's currency
-   * @param {string} currency - User's currency code
-   * @returns {number} Amount in PHP
    */
   async convertToBase(amount, currency) {
     return await this.convert(amount, currency, this.baseCurrency);
@@ -119,9 +127,6 @@ class CurrencyService {
 
   /**
    * Convert PHP amount from database to user's preferred currency
-   * @param {number} amountInPHP - Amount stored in database (PHP)
-   * @param {string} currency - User's preferred currency
-   * @returns {number} Amount in user's currency
    */
   async convertFromBase(amountInPHP, currency) {
     return await this.convert(amountInPHP, this.baseCurrency, currency);
@@ -129,9 +134,6 @@ class CurrencyService {
 
   /**
    * Get current rate for a specific currency pair
-   * @param {string} fromCurrency 
-   * @param {string} toCurrency 
-   * @returns {number} Exchange rate
    */
   async getRate(fromCurrency, toCurrency) {
     if (fromCurrency === toCurrency) return 1;
@@ -156,7 +158,7 @@ class CurrencyService {
    * Fallback rates if API is unavailable (approximate rates)
    */
   getFallbackRates() {
-    console.log('⚠️  Using fallback exchange rates');
+    console.log('⚠️  Using fallback exchange rates');
     return {
       rates: {
         PHP: 1,
