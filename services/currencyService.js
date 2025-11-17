@@ -22,7 +22,7 @@ class CurrencyService {
     if (!EXCHANGE_RATE_API_KEY) {
         console.error("FATAL: EXCHANGE_RATE_API_KEY is missing. Using fallback rates only.");
         // This old URL is what causes the original error when run publicly
-        this.apiUrl = 'https://api.exchangerate-api.com/v4/latest/PHP';
+        this.apiUrl = 'https://v6.exchangerate-api.com/v6/latest/PHP';
     } else {
         // Correct V6 URL structure: https://v6.exchangerate-api.com/v6/YOUR_KEY/latest/PHP
         this.apiUrl = `https://v6.exchangerate-api.com/v6/${EXCHANGE_RATE_API_KEY}/latest/PHP`;
