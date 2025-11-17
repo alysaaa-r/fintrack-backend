@@ -1,10 +1,12 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
 // Load environment variables
 dotenv.config();
+
+// Connect to Firebase
+require('./config/database');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -32,10 +34,26 @@ app.get('/api/test', (req, res) => {
   res.json({ success: true, message: 'Backend is reachable!' });
 });
 
-// Database connection
-mongoose.connect(process.env.MONGODB_URI)
-.then(() => console.log('✅ MongoDB Connected'))
-.catch((err) => console.error('❌ MongoDB Connection Error:', err));
+// Database health check (Firestore)
+const { getFirestore } = require('firebase-admin/firestore');
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const db = getFirestore();
+    // Try to list collections as a connectivity test
+    const collections = await db.listCollections();
+    res.json({
+      success: true,
+      message: 'Connected to Firebase Firestore',
+      collections: collections.map(col => col.id)
+    });
+  } catch (error) {
+    res.status(503).json({
+      success: false,
+      message: 'Firestore connection failed',
+      error: error.message
+    });
+  }
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -45,9 +63,37 @@ app.use('/api/goals', goalRoutes);
 app.use('/api/invitations', invitationRoutes);
 app.use('/api/currency', currencyRoutes);
 
+
+// Add this AFTER your existing routes (around line 50-60):
+
+// Health check endpoint for app connectivity (Firestore)
+app.get('/api/health', async (req, res) => {
+  try {
+    const db = getFirestore();
+    // Try a simple Firestore operation
+    await db.collection('healthcheck').get();
+    res.json({
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      service: 'FinTrack Backend',
+      database: 'Connected to Firebase Firestore',
+      environment: process.env.NODE_ENV || 'development',
+      port: process.env.PORT || 5000
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Error handling middleware (keep this at the end)
+app.use((err, req, res, next) => {
+  // ... existing error handling
+});
+
+
 // Health check
-app.get('/', (req, res) => {
-  res.json({ message: 'FinTrack API Server Running' });
+app.get('/api/health/', (req, res) => {
+  res.json({ message: 'FinTrack API Server Running',status: 'healthy' });
 });
 
 // Error handling middleware

@@ -1,59 +1,39 @@
-const mongoose = require('mongoose');
+const { getFirestore } = require('firebase-admin/firestore');
 const bcrypt = require('bcryptjs');
 
-const UserSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: [true, 'Please provide a name'],
-    trim: true
-  },
-  phone: {
-    type: String,
-    required: [true, 'Please provide a phone number'],
-    unique: true,
-    trim: true,
-    match: [/^\d{11}$/, 'Phone number must be 11 digits']
-  },
-  username: {
-    type: String,
-    unique: true,
-    sparse: true,
-    trim: true
-  },
-  password: {
-    type: String,
-    required: [true, 'Please provide a password'],
-    minlength: [8, 'Password must be at least 8 characters'],
-    select: false
-  },
-  profileImage: {
-    type: String,
-    default: null
-  },
-  preferredCurrency: {
-    type: String,
-    default: 'PHP',
-    uppercase: true
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
-});
+const db = getFirestore();
+const USERS_COLLECTION = 'users';
 
-// Hash password before saving
-UserSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
-    return next();
-  }
+async function createUser(userData) {
+  // Hash password before saving
   const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
-  next();
-});
+  const hashedPassword = await bcrypt.hash(userData.password, salt);
+  const user = {
+    ...userData,
+    password: hashedPassword,
+    createdAt: new Date(),
+  };
+  const userRef = db.collection(USERS_COLLECTION).doc();
+  await userRef.set(user);
+  return { id: userRef.id, ...user };
+}
 
-// Method to compare passwords
-UserSchema.methods.comparePassword = async function(candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
+async function getUserByUsername(username) {
+  const snapshot = await db.collection(USERS_COLLECTION)
+    .where('username', '==', username)
+    .limit(1)
+    .get();
+  if (snapshot.empty) return null;
+  const doc = snapshot.docs[0];
+  return { id: doc.id, ...doc.data() };
+}
+
+async function comparePassword(storedPassword, candidatePassword) {
+  return await bcrypt.compare(candidatePassword, storedPassword);
+}
+
+module.exports = {
+  createUser,
+  getUserByUsername,
+  comparePassword,
 };
-
-module.exports = mongoose.model('User', UserSchema);

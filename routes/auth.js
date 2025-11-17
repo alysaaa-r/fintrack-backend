@@ -24,7 +24,7 @@ router.post('/signup', [
     const { name, phone, password } = req.body;
 
     // Check if user already exists
-    const existingUser = await User.findOne({ phone });
+    const existingUser = await User.getUserByUsername(phone);
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -33,20 +33,20 @@ router.post('/signup', [
     }
 
     // Create user
-    const user = await User.create({
+    const user = await User.createUser({
       name,
       phone,
       password
     });
 
     // Generate token
-    const token = generateToken(user._id);
+    const token = generateToken(user.id);
 
     res.status(201).json({
       success: true,
       token,
       user: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         phone: user.phone,
         username: user.username,
@@ -80,8 +80,8 @@ router.post('/login', [
   try {
     const { phone, password } = req.body;
 
-    // Find user and include password
-    const user = await User.findOne({ phone }).select('+password');
+    // Find user by phone
+    const user = await User.getUserByUsername(phone);
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -90,7 +90,7 @@ router.post('/login', [
     }
 
     // Check password
-    const isPasswordMatch = await user.comparePassword(password);
+    const isPasswordMatch = await User.comparePassword(user.password, password);
     if (!isPasswordMatch) {
       return res.status(401).json({
         success: false,
@@ -99,13 +99,13 @@ router.post('/login', [
     }
 
     // Generate token
-    const token = generateToken(user._id);
+    const token = generateToken(user.id);
 
     res.json({
       success: true,
       token,
       user: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         phone: user.phone,
         username: user.username,

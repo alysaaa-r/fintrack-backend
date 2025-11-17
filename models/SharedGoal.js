@@ -1,83 +1,36 @@
-const mongoose = require('mongoose');
+const { getFirestore } = require('firebase-admin/firestore');
 
-const SharedGoalSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  category: {
-    type: String,
-    required: true
-  },
-  targetAmount: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  targetAmountPHP: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  currency: {
-    type: String,
-    default: 'PHP',
-    uppercase: true
-  },
-  creator: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  members: [{
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    color: String,
-    joinedAt: {
-      type: Date,
-      default: Date.now
-    }
-  }],
-  contributions: [{
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    amount: {
-      type: Number,
-      required: true
-    },
-    amountPHP: {
-      type: Number,
-      required: true
-    },
-    currency: {
-      type: String,
-      required: true,
-      uppercase: true
-    },
-    exchangeRate: {
-      type: Number,
-      required: true
-    },
-    type: {
-      type: String,
-      enum: ['add', 'withdraw'],
-      default: 'add'
-    },
-    description: String,
-    date: {
-      type: Date,
-      default: Date.now
-    }
-  }],
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
-});
+const db = getFirestore();
+const SHARED_GOALS_COLLECTION = 'sharedGoals';
 
-module.exports = mongoose.model('SharedGoal', SharedGoalSchema);
+async function createSharedGoal(goalData) {
+  const goal = {
+    ...goalData,
+    createdAt: new Date(),
+  };
+  const goalRef = db.collection(SHARED_GOALS_COLLECTION).doc();
+  await goalRef.set(goal);
+  return { id: goalRef.id, ...goal };
+}
+
+async function getSharedGoalById(id) {
+  const doc = await db.collection(SHARED_GOALS_COLLECTION).doc(id).get();
+  if (!doc.exists) return null;
+  return { id: doc.id, ...doc.data() };
+}
+
+async function updateSharedGoal(id, updates) {
+  await db.collection(SHARED_GOALS_COLLECTION).doc(id).update(updates);
+  return getSharedGoalById(id);
+}
+
+async function deleteSharedGoal(id) {
+  await db.collection(SHARED_GOALS_COLLECTION).doc(id).delete();
+}
+
+module.exports = {
+  createSharedGoal,
+  getSharedGoalById,
+  updateSharedGoal,
+  deleteSharedGoal,
+};

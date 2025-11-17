@@ -60,14 +60,14 @@ router.post('/', protect, async (req, res) => {
     const expireIn = expirationMinutes || 5;
     const expiresAt = new Date(Date.now() + expireIn * 60 * 1000);
 
-    const invitation = await Invitation.create({
+    const invitation = await Invitation.createInvitation({
       code,
       type,
       referenceId,
-      creator: req.user._id,
-      expiresAt
+      creator: req.user.id,
+      expiresAt,
+      usedBy: []
     });
-
     res.status(201).json({
       success: true,
       invitation: {
@@ -100,76 +100,55 @@ router.post('/join', protect, async (req, res) => {
     }
 
     // Find invitation
-    const invitation = await Invitation.findOne({ 
-      code: code.toUpperCase() 
-    });
-
+    const invitation = await Invitation.getInvitationByCode(code.toUpperCase());
     if (!invitation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Invalid invitation code'
-      });
+      return res.status(404).json({ success: false, message: 'Invalid invitation code' });
     }
-
     // Check expiration
     if (new Date() > invitation.expiresAt) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invitation code has expired'
-      });
+      return res.status(400).json({ success: false, message: 'Invitation code has expired' });
     }
-
     // Check if user already used this code
-    if (invitation.usedBy.includes(req.user._id)) {
-      return res.status(400).json({
-        success: false,
-        message: 'You have already used this invitation code'
-      });
+    if (invitation.usedBy && invitation.usedBy.includes(req.user.id)) {
+      return res.status(400).json({ success: false, message: 'You have already used this invitation code' });
     }
-
     // Get the budget or goal
-    const Model = invitation.type === 'budget' ? SharedBudget : SharedGoal;
-    const item = await Model.findById(invitation.referenceId);
-
+    const Model = invitation.type === 'budget' ? require('../models/SharedBudget') : require('../models/SharedGoal');
+    const item = invitation.type === 'budget'
+      ? await Model.getSharedBudgetById(invitation.referenceId)
+      : await Model.getSharedGoalById(invitation.referenceId);
     if (!item) {
-      return res.status(404).json({
-        success: false,
-        message: `${invitation.type === 'budget' ? 'Budget' : 'Goal'} not found`
-      });
+      return res.status(404).json({ success: false, message: `${invitation.type === 'budget' ? 'Budget' : 'Goal'} not found` });
     }
-
     // Check if user is already a member
-    const isMember = item.members.some(m => m.user.toString() === req.user._id.toString());
+    const isMember = item.members && item.members.some(m => m.user === req.user.id);
     if (isMember) {
-      return res.status(400).json({
-        success: false,
-        message: `You are already a member of this ${invitation.type}`
-      });
+      return res.status(400).json({ success: false, message: `You are already a member of this ${invitation.type}` });
     }
-
     // Add user to members with a color
     const memberColors = ['#3B82F6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
     const colorIndex = item.members.length % memberColors.length;
-
-    item.members.push({
-      user: req.user._id,
+    const newMember = {
+      user: req.user.id,
       color: memberColors[colorIndex],
       joinedAt: new Date()
-    });
-
-    await item.save();
-
+    };
+    const updatedMembers = [...item.members, newMember];
+    if (invitation.type === 'budget') {
+      await Model.updateSharedBudget(invitation.referenceId, { members: updatedMembers });
+    } else {
+      await Model.updateSharedGoal(invitation.referenceId, { members: updatedMembers });
+    }
     // Mark invitation as used by this user
-    invitation.usedBy.push(req.user._id);
-    await invitation.save();
-
-    await item.populate('members.user', 'name phone');
-
+    const updatedUsedBy = invitation.usedBy ? [...invitation.usedBy, req.user.id] : [req.user.id];
+    await Invitation.updateInvitation(invitation.id, { usedBy: updatedUsedBy });
     res.json({
       success: true,
       message: `Successfully joined ${invitation.type}`,
       type: invitation.type,
-      item
+      item: invitation.type === 'budget'
+        ? await Model.getSharedBudgetById(invitation.referenceId)
+        : await Model.getSharedGoalById(invitation.referenceId)
     });
   } catch (error) {
     console.error('Join invitation error:', error);
@@ -185,24 +164,13 @@ router.post('/join', protect, async (req, res) => {
 // @access  Private
 router.get('/:code', protect, async (req, res) => {
   try {
-    const invitation = await Invitation.findOne({ 
-      code: req.params.code.toUpperCase() 
-    }).populate('referenceId');
-
+    const invitation = await Invitation.getInvitationByCode(req.params.code.toUpperCase());
     if (!invitation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Invalid invitation code'
-      });
+      return res.status(404).json({ success: false, message: 'Invalid invitation code' });
     }
-
     if (new Date() > invitation.expiresAt) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invitation code has expired'
-      });
+      return res.status(400).json({ success: false, message: 'Invitation code has expired' });
     }
-
     res.json({
       success: true,
       invitation: {

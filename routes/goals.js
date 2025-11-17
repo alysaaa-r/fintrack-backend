@@ -18,25 +18,21 @@ router.post('/', protect, async (req, res) => {
 
     const memberColors = ['#3B82F6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
     
-    const goal = await SharedGoal.create({
+    const goal = await SharedGoal.createSharedGoal({
       name,
       category,
       targetAmount,
       targetAmountPHP,
       currency: goalCurrency,
-      creator: req.user._id,
+      creator: req.user.id,
       members: [{
-        user: req.user._id,
-        color: memberColors[0]
-      }]
+        user: req.user.id,
+        color: memberColors[0],
+        joinedAt: new Date()
+      }],
+      contributions: []
     });
-
-    await goal.populate('members.user', 'name phone');
-
-    res.status(201).json({
-      success: true,
-      goal
-    });
+    res.status(201).json({ success: true, goal });
   } catch (error) {
     console.error('Create goal error:', error);
     res.status(500).json({
@@ -51,14 +47,13 @@ router.post('/', protect, async (req, res) => {
 // @access  Private
 router.get('/', protect, async (req, res) => {
   try {
-    const goals = await SharedGoal.find({
-      'members.user': req.user._id
-    }).populate('members.user', 'name phone').populate('contributions.user', 'name');
-
-    res.json({
-      success: true,
-      goals
-    });
+    // Firestore: Query goals where user is a member
+    // This requires a custom query or filtering after fetch
+    const allGoalsSnapshot = await SharedGoal.getAllGoals();
+    const goals = allGoalsSnapshot.filter(goal =>
+      goal.members && goal.members.some(m => m.user === req.user.id)
+    );
+    res.json({ success: true, goals });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -72,30 +67,16 @@ router.get('/', protect, async (req, res) => {
 // @access  Private
 router.get('/:id', protect, async (req, res) => {
   try {
-    const goal = await SharedGoal.findById(req.params.id)
-      .populate('members.user', 'name phone')
-      .populate('contributions.user', 'name');
-
+    const goal = await SharedGoal.getSharedGoalById(req.params.id);
     if (!goal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Goal not found'
-      });
+      return res.status(404).json({ success: false, message: 'Goal not found' });
     }
-
     // Check if user is a member
-    const isMember = goal.members.some(m => m.user._id.toString() === req.user._id.toString());
+    const isMember = goal.members && goal.members.some(m => m.user === req.user.id);
     if (!isMember) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this goal'
-      });
+      return res.status(403).json({ success: false, message: 'Not authorized to access this goal' });
     }
-
-    res.json({
-      success: true,
-      goal
-    });
+    res.json({ success: true, goal });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -118,30 +99,21 @@ router.post('/:id/contributions', protect, async (req, res) => {
       });
     }
 
-    const goal = await SharedGoal.findById(req.params.id);
-
+    const goal = await SharedGoal.getSharedGoalById(req.params.id);
     if (!goal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Goal not found'
-      });
+      return res.status(404).json({ success: false, message: 'Goal not found' });
     }
-
     // Check if user is a member
-    const isMember = goal.members.some(m => m.user.toString() === req.user._id.toString());
+    const isMember = goal.members && goal.members.some(m => m.user === req.user.id);
     if (!isMember) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to contribute to this goal'
-      });
+      return res.status(403).json({ success: false, message: 'Not authorized to contribute to this goal' });
     }
-
     // Convert contribution amount to PHP for storage
     const amountPHP = await currencyService.convertToBase(amount, currency);
     const exchangeRate = await currencyService.getRate(currency, 'PHP');
-
-    goal.contributions.push({
-      user: req.user._id,
+    // Add contribution to Firestore
+    const newContribution = {
+      user: req.user.id,
       amount,
       amountPHP,
       currency,
@@ -149,14 +121,13 @@ router.post('/:id/contributions', protect, async (req, res) => {
       type: type || 'add',
       description,
       date: new Date()
-    });
-
-    await goal.save();
-    await goal.populate('contributions.user', 'name');
-
+    };
+    const updatedContributions = goal.contributions ? [...goal.contributions, newContribution] : [newContribution];
+    await SharedGoal.updateSharedGoal(req.params.id, { contributions: updatedContributions });
+    const updatedGoal = await SharedGoal.getSharedGoalById(req.params.id);
     res.json({
       success: true,
-      goal,
+      goal: updatedGoal,
       conversionInfo: {
         originalAmount: amount,
         originalCurrency: currency,
@@ -179,29 +150,16 @@ router.post('/:id/contributions', protect, async (req, res) => {
 // @access  Private
 router.delete('/:id', protect, async (req, res) => {
   try {
-    const goal = await SharedGoal.findById(req.params.id);
-
+    const goal = await SharedGoal.getSharedGoalById(req.params.id);
     if (!goal) {
-      return res.status(404).json({
-        success: false,
-        message: 'Goal not found'
-      });
+      return res.status(404).json({ success: false, message: 'Goal not found' });
     }
-
     // Only creator can delete
-    if (goal.creator.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Only the creator can delete this goal'
-      });
+    if (goal.creator !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Only the creator can delete this goal' });
     }
-
-    await goal.deleteOne();
-
-    res.json({
-      success: true,
-      message: 'Goal deleted successfully'
-    });
+    await SharedGoal.deleteSharedGoal(req.params.id);
+    res.json({ success: true, message: 'Goal deleted successfully' });
   } catch (error) {
     res.status(500).json({
       success: false,

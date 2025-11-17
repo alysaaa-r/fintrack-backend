@@ -1,78 +1,36 @@
-const mongoose = require('mongoose');
+const { getFirestore } = require('firebase-admin/firestore');
 
-const SharedBudgetSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  category: {
-    type: String,
-    required: true
-  },
-  totalBudget: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  totalBudgetPHP: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  currency: {
-    type: String,
-    default: 'PHP',
-    uppercase: true
-  },
-  creator: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  members: [{
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    color: String,
-    joinedAt: {
-      type: Date,
-      default: Date.now
-    }
-  }],
-  expenses: [{
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    amount: {
-      type: Number,
-      required: true
-    },
-    amountPHP: {
-      type: Number,
-      required: true
-    },
-    currency: {
-      type: String,
-      required: true,
-      uppercase: true
-    },
-    exchangeRate: {
-      type: Number,
-      required: true
-    },
-    description: String,
-    date: {
-      type: Date,
-      default: Date.now
-    }
-  }],
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
-});
+const db = getFirestore();
+const SHARED_BUDGETS_COLLECTION = 'sharedBudgets';
 
-module.exports = mongoose.model('SharedBudget', SharedBudgetSchema);
+async function createSharedBudget(budgetData) {
+  const budget = {
+    ...budgetData,
+    createdAt: new Date(),
+  };
+  const budgetRef = db.collection(SHARED_BUDGETS_COLLECTION).doc();
+  await budgetRef.set(budget);
+  return { id: budgetRef.id, ...budget };
+}
+
+async function getSharedBudgetById(id) {
+  const doc = await db.collection(SHARED_BUDGETS_COLLECTION).doc(id).get();
+  if (!doc.exists) return null;
+  return { id: doc.id, ...doc.data() };
+}
+
+async function updateSharedBudget(id, updates) {
+  await db.collection(SHARED_BUDGETS_COLLECTION).doc(id).update(updates);
+  return getSharedBudgetById(id);
+}
+
+async function deleteSharedBudget(id) {
+  await db.collection(SHARED_BUDGETS_COLLECTION).doc(id).delete();
+}
+
+module.exports = {
+  createSharedBudget,
+  getSharedBudgetById,
+  updateSharedBudget,
+  deleteSharedBudget,
+};
