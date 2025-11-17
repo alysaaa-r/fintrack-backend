@@ -14,6 +14,7 @@ const connectFirebase = () => {
       const serviceAccount = require(svcPath);
       initializeApp({
         credential: cert(serviceAccount),
+        databaseId: 'fintrack' // 👈 ADDED: Connects to your specific database
       });
       console.log('✅ Firebase Initialized using service account:', svcPath);
     } else {
@@ -23,6 +24,7 @@ const connectFirebase = () => {
         'or set the env var FIREBASE_SERVICE_ACCOUNT_PATH to its full path.');
       initializeApp({
         credential: applicationDefault(),
+        databaseId: 'fintrack' // 👈 ADDED: Backup connection also needs this
       });
       console.log('✅ Firebase Initialized using application default credentials');
     }
