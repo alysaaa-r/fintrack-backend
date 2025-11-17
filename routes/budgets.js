@@ -18,20 +18,20 @@ router.post('/', protect, async (req, res) => {
 
     const memberColors = ['#3B82F6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
     
-    const budget = await SharedBudget.create({
+    const budget = await SharedBudget.createSharedBudget({
       name,
       category,
       totalBudget,
       totalBudgetPHP,
       currency: budgetCurrency,
-      creator: req.user._id,
+      creator: req.user.id,
       members: [{
-        user: req.user._id,
-        color: memberColors[0]
-      }]
+        user: req.user.id,
+        color: memberColors[0],
+        joinedAt: new Date()
+      }],
+      expenses: []
     });
-
-    await budget.populate('members.user', 'name phone');
 
     res.status(201).json({
       success: true,
@@ -51,10 +51,12 @@ router.post('/', protect, async (req, res) => {
 // @access  Private
 router.get('/', protect, async (req, res) => {
   try {
-    const budgets = await SharedBudget.find({
-      'members.user': req.user._id
-    }).populate('members.user', 'name phone').populate('expenses.user', 'name');
-
+    // Firestore: Query budgets where user is a member
+    // This requires a custom query or filtering after fetch
+    const allBudgetsSnapshot = await SharedBudget.getAllBudgets();
+    const budgets = allBudgetsSnapshot.filter(budget =>
+      budget.members && budget.members.some(m => m.user === req.user.id)
+    );
     res.json({
       success: true,
       budgets
@@ -72,30 +74,16 @@ router.get('/', protect, async (req, res) => {
 // @access  Private
 router.get('/:id', protect, async (req, res) => {
   try {
-    const budget = await SharedBudget.findById(req.params.id)
-      .populate('members.user', 'name phone')
-      .populate('expenses.user', 'name');
-
+    const budget = await SharedBudget.getSharedBudgetById(req.params.id);
     if (!budget) {
-      return res.status(404).json({
-        success: false,
-        message: 'Budget not found'
-      });
+      return res.status(404).json({ success: false, message: 'Budget not found' });
     }
-
     // Check if user is a member
-    const isMember = budget.members.some(m => m.user._id.toString() === req.user._id.toString());
+    const isMember = budget.members && budget.members.some(m => m.user === req.user.id);
     if (!isMember) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to access this budget'
-      });
+      return res.status(403).json({ success: false, message: 'Not authorized to access this budget' });
     }
-
-    res.json({
-      success: true,
-      budget
-    });
+    res.json({ success: true, budget });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -118,44 +106,34 @@ router.post('/:id/expenses', protect, async (req, res) => {
       });
     }
 
-    const budget = await SharedBudget.findById(req.params.id);
-
+    const budget = await SharedBudget.getSharedBudgetById(req.params.id);
     if (!budget) {
-      return res.status(404).json({
-        success: false,
-        message: 'Budget not found'
-      });
+      return res.status(404).json({ success: false, message: 'Budget not found' });
     }
-
     // Check if user is a member
-    const isMember = budget.members.some(m => m.user.toString() === req.user._id.toString());
+    const isMember = budget.members && budget.members.some(m => m.user === req.user.id);
     if (!isMember) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to add expenses to this budget'
-      });
+      return res.status(403).json({ success: false, message: 'Not authorized to add expenses to this budget' });
     }
-
     // Convert expense amount to PHP for storage
     const amountPHP = await currencyService.convertToBase(amount, currency);
     const exchangeRate = await currencyService.getRate(currency, 'PHP');
-
-    budget.expenses.push({
-      user: req.user._id,
+    // Add expense to Firestore
+    const newExpense = {
+      user: req.user.id,
       amount,
       amountPHP,
       currency,
       exchangeRate,
       description,
       date: new Date()
-    });
-
-    await budget.save();
-    await budget.populate('expenses.user', 'name');
-
+    };
+    const updatedExpenses = budget.expenses ? [...budget.expenses, newExpense] : [newExpense];
+    await SharedBudget.updateSharedBudget(req.params.id, { expenses: updatedExpenses });
+    const updatedBudget = await SharedBudget.getSharedBudgetById(req.params.id);
     res.json({
       success: true,
-      budget,
+      budget: updatedBudget,
       conversionInfo: {
         originalAmount: amount,
         originalCurrency: currency,
@@ -178,29 +156,16 @@ router.post('/:id/expenses', protect, async (req, res) => {
 // @access  Private
 router.delete('/:id', protect, async (req, res) => {
   try {
-    const budget = await SharedBudget.findById(req.params.id);
-
+    const budget = await SharedBudget.getSharedBudgetById(req.params.id);
     if (!budget) {
-      return res.status(404).json({
-        success: false,
-        message: 'Budget not found'
-      });
+      return res.status(404).json({ success: false, message: 'Budget not found' });
     }
-
     // Only creator can delete
-    if (budget.creator.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Only the creator can delete this budget'
-      });
+    if (budget.creator !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Only the creator can delete this budget' });
     }
-
-    await budget.deleteOne();
-
-    res.json({
-      success: true,
-      message: 'Budget deleted successfully'
-    });
+    await SharedBudget.deleteSharedBudget(req.params.id);
+    res.json({ success: true, message: 'Budget deleted successfully' });
   } catch (error) {
     res.status(500).json({
       success: false,

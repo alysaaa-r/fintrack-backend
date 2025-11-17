@@ -8,13 +8,18 @@ const User = require('../models/User');
 // @access  Private
 router.get('/me', protect, async (req, res) => {
   try {
+    // Use Firestore user id
+    const user = await User.getUserByUsername(req.user.phone);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
     res.json({
       success: true,
       user: {
-        id: req.user._id,
-        name: req.user.name,
-        phone: req.user.phone,
-        createdAt: req.user.createdAt
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        createdAt: user.createdAt
       }
     });
   } catch (error) {
@@ -30,19 +35,15 @@ router.get('/me', protect, async (req, res) => {
 // @access  Private
 router.get('/:id', protect, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
-    
+    // Get user by Firestore id
+    const user = await User.getUserByUsername(req.params.id);
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
-
     res.json({
       success: true,
       user: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         phone: user.phone
       }
